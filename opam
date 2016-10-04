@@ -37,7 +37,10 @@ depends: [
   "tls" {>= "0.6.0"}
   "nocrypto" {>= "0.5.1"}
   "dns" {>= "0.15.3"}
+  "ppx_deriving"
+  "ppx_sexp_conv"
+  "ppx_fields_conv"
   "menhir"
   "camlzip"
 ]
-available: [ ocaml-version >= "4.01.0" ]
+available: [ ocaml-version >= "4.02.3" ]

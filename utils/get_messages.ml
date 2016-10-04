@@ -107,7 +107,7 @@ let filtered message label labels size =
     false
 
 let output message label outfiles = function
-  | None -> Lwt_io.fprintf Lwt_io.stdout "%s%!" message >> return outfiles
+  | None -> Lwt_io.fprintf Lwt_io.stdout "%s%!" message >>= fun () ->return outfiles
   | Some outdir ->
     let label = Regex.replace ~regx:"/" ~tmpl:"." label in
     let label = Regex.replace ~regx:" " ~tmpl:"." label in

@@ -132,7 +132,7 @@ let get_script file user =
     | None -> return ()
     | Some line ->
       match process_meta line with
-      | `Ok -> Lwt_stream.junk strm >> header strm
+      | `Ok -> Lwt_stream.junk strm >>= fun () ->header strm
       | `Done -> return ()
   in
   header strm >>= fun () ->
@@ -263,7 +263,7 @@ let write_echo oc command =
   if !_echo || !Meta.echo then
     Printf.printf "%s%!" command;
   let command = if !compression then Imap_crypto.do_compress command else command in
-  Lwt_io.write oc command >> Lwt_io.flush oc
+  Lwt_io.write oc command >>= fun () ->Lwt_io.flush oc
 
 let send_append ic oc mailbox messages =
   Lwt_list.fold_right_s (fun message cnt ->
@@ -326,7 +326,7 @@ let exec_command strm ic oc =
       Lwt_unix.sleep (float_of_string (Re.get subs 1)) >>= fun () ->
       return `OkSleep
     ) else (
-      write_echo oc command >> return (`Ok (is_compression command))
+      write_echo oc command >>= fun () ->return (`Ok (is_compression command))
     )
 
 (* check if need to read a chunk,
@@ -421,7 +421,7 @@ let () =
         begin
         match repeat with
         | Some flag ->
-          Lwt_unix.system ("echo 1 >> ./" ^ flag) >>= fun _ ->
+          Lwt_unix.system ("echo 1 >>= fun () ->./" ^ flag) >>= fun _ ->
           loop ()
         | None ->
           return ()

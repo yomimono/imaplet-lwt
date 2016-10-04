@@ -54,7 +54,7 @@ let write_server t w msg =
  *)
 let read_server t r =
   Lwt.pick [
-    (Lwt_unix.sleep timeout >> return None);
+    (Lwt_unix.sleep timeout >>= fun () ->return None);
     Lwt_io.read_line_opt r;
   ] >>= function
   | Some str -> dolog t `Info3 (Printf.sprintf "--> server read: %s\n" str); return (Some str)
@@ -83,7 +83,7 @@ let send_data t1 r w =
     (* send one line of data at a time *)
     let rec send () =
       t1.feeder () >>= function
-      | Some str -> write_server t1.smtp w str >> send ()
+      | Some str -> write_server t1.smtp w str >>= fun () ->send ()
       | None -> write_server t1.smtp w "." >>= fun () ->
         read_server_rc t1.smtp r "^250"
     in

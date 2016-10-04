@@ -132,7 +132,7 @@ let client_send addr f init =
   let outchan = Lwt_io.of_fd ~mode:Lwt_io.output socket in
   f init socket inchan outchan >>= fun acc ->
   Lwt_unix.close socket >>= fun () ->
-  try_close inchan >> try_close outchan >>= fun () ->
+  try_close inchan >>= fun () ->try_close outchan >>= fun () ->
   return acc
 
 let client_send_dgram ?interface addr f init =
@@ -163,9 +163,11 @@ let server addr config f err =
     async ( fun () ->
       catch( fun () ->
         f sock_c netr netw >>= fun () ->
-        try_close netr >> try_close netw >> try_close_sock sock_c
+        try_close netr >>= fun () ->try_close netw >>= fun () -> try_close_sock sock_c
       ) 
-      (function ex -> try_close netr >> try_close netw >> try_close_sock sock_c >> err ex)
+      (function ex -> try_close netr >>= fun () ->
+              try_close netw >>= fun () ->
+              try_close_sock sock_c >>= fun () -> err ex)
     ); connect f sock cert
   in
   connect f sock cert

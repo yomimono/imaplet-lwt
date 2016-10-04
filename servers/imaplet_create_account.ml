@@ -205,7 +205,7 @@ let genrsa user pswd priv_path =
       priv_key
     )
     end
-  ) >> 
+  ) >>= fun () ->
   return priv_key
 
 let reqcert priv pem =

@@ -638,7 +638,7 @@ let rec authlogin user context =
     begin
     match user with
     | None ->
-      write context "334 UGFzc3dvcmQ6" >> (* 334 Password *)
+      write context "334 UGFzc3dvcmQ6" >>= fun () ->(* 334 Password *)
       return (`State (authlogin (Some text), context))
     | Some user -> 
       authenticate user ~password:text context
@@ -728,7 +728,7 @@ let greeting context =
       else
         run (helo) context
     | `State (state,context) -> run (state) context
-    | _ -> write context "503 5.5.1 Command out of sequence" >> run (state) context
+    | _ -> write context "503 5.5.1 Command out of sequence" >>= fun () ->run (state) context
   in
   run (start) context
 

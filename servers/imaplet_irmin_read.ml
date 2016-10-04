@@ -221,7 +221,7 @@ let main () =
       return ()
     | "tree" -> 
       let key = Key_.create_account (get_user user) in
-      tree user key "" >> request user
+      tree user key "" >>= fun () ->request user
     | "select" -> 
       let mailbox = Str.replace_first (Str.regexp "+") " " (arg 1) in
       get_keys srv_config user >>= fun keys ->

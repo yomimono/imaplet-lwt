@@ -213,7 +213,7 @@ let with_file ?(lock=false) path ~flags ~perms ~mode ~f =
   Lwt.finalize (fun () -> f ch)
   (fun () -> 
     _unlock lock fd >>= fun () ->
-    Lwt_io.close ch >> Lwt_unix.close fd
+    Lwt_io.close ch >>= fun () ->Lwt_unix.close fd
   )
 
 let lines_of_file ?(g=(fun ex -> raise ex)) file ~init ~f =

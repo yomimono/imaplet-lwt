@@ -67,7 +67,7 @@ let check_users user_path user pswd =
     if Regex.match_regex ~case:false ~regx:("^" ^ user ^ ":") line then
       raise AccountExists;
     return ()
-  ) >> return false) (fun _ -> return true)
+  ) >>= fun () ->return false) (fun _ -> return true)
 
 
 let get_interfaces () =
@@ -160,9 +160,9 @@ Current configuration will be saved in %s.back.\n%!" Install.config_path;
   Printf.printf "If the imaplet server runs from command line then it might be more useful to log the messages to the terminal\n%!";
   begin
   input "Log the messages to 1(/var/log):2(different location):3(stderr):" "^[1-3]$" >>= function
-  | "1" -> system ("mkdir -p /var/log") >> return "/var/log"
+  | "1" -> system ("mkdir -p /var/log") >>= fun () ->return "/var/log"
   | "2" -> (input "Enter location:" "") >>= fun dir ->
-    system ("mkdir -p " ^ dir) >> return dir
+    system ("mkdir -p " ^ dir) >>= fun () ->return dir
   | "3" -> return "stderr"
   | _ -> return "stderr"
   end >>= fun log ->

@@ -94,8 +94,8 @@ let sync user mlogout config =
   Log_.log `Info3 (Printf.sprintf "### synching local %s with remote %s\n" local remote);
   let pick () =
     Lwt.pick [
-      Lwt_mutex.lock mlogout >> return `Done;
-      Lwt_unix.sleep config.replicate_interval >> return `Timeout; 
+      Lwt_mutex.lock mlogout >>= fun () ->return `Done;
+      Lwt_unix.sleep config.replicate_interval >>= fun () ->return `Timeout; 
     ]
   in
   let rec _maintenance () =

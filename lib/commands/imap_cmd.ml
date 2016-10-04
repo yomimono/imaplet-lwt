@@ -123,7 +123,7 @@ let start_async_uncompr ic_net oc_pipe =
     read_compressed ic_net >>= function
     | None -> try_close oc_pipe
     | Some buff -> 
-      inflate strm oc_pipe buff >>
+      inflate strm oc_pipe buff >>= fun () ->
       read ()
   in
   read ()
@@ -198,7 +198,7 @@ let get_client_ids l =
 
 let handle_id context l =
   context.client_id := get_client_ids l;
-  write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged (formated_id(Configuration.id))) >>
+  write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged (formated_id(Configuration.id))) >>= fun () ->
   response context None (Resp_Ok (None, "ID completed")) None
 
 let handle_capability context = 
@@ -207,18 +207,18 @@ let handle_capability context =
     write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged (formated_capability(Configuration.capability)))
   else
     write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged (formated_capability(Configuration.auth_capability)))
-  end >>
+  end >>= fun () ->
   response context None (Resp_Ok (None, "CAPABILITY completed")) None
 
 let handle_logout context =
-  unset_recent context >>
-  write_resp !(context.compression) context.id !(context.netw) (Resp_Bye(None,"")) >>
+  unset_recent context >>= fun () ->
+  write_resp !(context.compression) context.id !(context.netw) (Resp_Bye(None,"")) >>= fun () ->
   response context (Some State_Logout) (Resp_Ok (None, "LOGOUT completed")) None
 
 let handle_enable capability context =
   begin
   if !(context.state) = State_Notauthenticated then
-    write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ("ENABLED")) >>
+    write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ("ENABLED")) >>= fun () ->
     return "ENABLE ignored in non-authenticated state."
   else (
     context.capability := capability :: !(context.capability);
@@ -238,8 +238,8 @@ let unsolicited_response context (status:Storage_meta.mailbox_metadata) =
     let str = String.concat "" l in
     untagged (replace ~regx:"MODSEQ ([0-9]+) " ~tmpl:"" str)) in 
   let resp_prefix = (fun () -> return ()) in
-  untagged (Printf.sprintf "%d EXISTS" status.count) >>
-  untagged (Printf.sprintf "%d RECENT" status.recent) >>
+  untagged (Printf.sprintf "%d EXISTS" status.count) >>= fun () ->
+  untagged (Printf.sprintf "%d RECENT" status.recent) >>= fun () ->
   Amailbox.fetch !(context.mailbox) resp_prefix resp_writer 
    ([SeqRange (Number 1,Wild)]) (FetchAtt [Fetch_Flags]) 
    (Some !(context.noop_modseq)) false >>= fun _ ->
@@ -288,7 +288,7 @@ let handle_authenticate context auth_type text =
   match text with 
   | Some text -> return text
   | None ->
-    write_resp !(context.compression) context.id !(context.netw) (Resp_Cont("")) >>
+    write_resp !(context.compression) context.id !(context.netw) (Resp_Cont("")) >>= fun () ->
     Lwt.pick [
       Lwt_mutex.lock context.client_timed_out >>= fun () -> raise ClientTimedOut;
       zip_read_exn context
@@ -343,7 +343,7 @@ let handle_list context reference mailbox lsub =
   end >>= fun l ->
   Lwt_list.iter_s (fun (file, flags) ->
       write_resp !(context.compression) context.id !(context.netw) (list_resp flags file)
-  ) l >>
+  ) l >>= fun () ->
   response context None (Resp_Ok(None, "LIST completed")) None
 
 (** review - where the flags are coming from TBD **)
@@ -370,19 +370,19 @@ let handle_select context mailbox condstore rw =
       let (flags,prmnt_flags) = Configuration.get_mbox_flags in
       let flags = to_plist (String.concat " " flags) in
       let pflags = to_plist (String.concat " " prmnt_flags) in
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ("FLAGS " ^ flags)) >>
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Permanentflags, pflags)) >>
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ((string_of_int header.count) ^ " EXISTS")) >>
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ((string_of_int header.recent) ^ " RECENT")) >>
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Uidvalidity, header.uidvalidity)) >>
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Uidnext, string_of_int header.uidnext)) >>
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Highestmodseq, Int64.to_string header.modseq)) >>
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ("FLAGS " ^ flags)) >>= fun () ->
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Permanentflags, pflags)) >>= fun () ->
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ((string_of_int header.count) ^ " EXISTS")) >>= fun () ->
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged ((string_of_int header.recent) ^ " RECENT")) >>= fun () ->
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Uidvalidity, header.uidvalidity)) >>= fun () ->
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Uidnext, string_of_int header.uidnext)) >>= fun () ->
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Highestmodseq, Int64.to_string header.modseq)) >>= fun () ->
       begin
       if header.unseen <> 0 then
         write_resp !(context.compression) context.id !(context.netw) (Resp_Ok (Some RespCode_Unseen, string_of_int header.unseen))
       else
         return ()
-      end >>
+      end >>= fun () ->
       begin 
       if rw then
         response context (Some State_Selected) (Resp_Ok(Some RespCode_Read_write, "")) (Some mbx)
@@ -449,7 +449,7 @@ let handle_status context mailbox optlist =
     ) "" optlist) in
     let prefix = ("STATUS " ^ (quote ~always:false mailbox) ^ " ") in
     let resp = prefix ^ (to_plist output) in
-    write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged resp) >>
+    write_resp !(context.compression) context.id !(context.netw) (Resp_Untagged resp) >>= fun () ->
     response context None (Resp_Ok(None, "STATUS completed")) None
   )
 
@@ -467,7 +467,7 @@ let idle_clients mailbox context =
         | Some (_,ctx_user_with_domain,ctx_mailbox) (* if not self and another client for same user/selected mbox *)
             when context.id <> ctx.id && ctx_user_with_domain = user_with_domain && mailbox = ctx_mailbox ->
           if Stack.is_empty !(ctx.commands) = false && is_idle (Stack.top !(ctx.commands)) then ( (* idle command is in progress for another client *)
-            unsolicited_response ctx status >>
+            unsolicited_response ctx status >>= fun () ->
             write_resp_untagged !(context.compression) context.id !(ctx.netw) ("Ok still here")
           ) else
             return ()
@@ -589,7 +589,7 @@ let handle_copy context sequence mailbox buid =
   | `NotSelectable ->  response context None (Resp_No(None,"Mailbox is not selectable")) None
   | `Error e -> response context None (Resp_No(None,e)) None
   | `Ok -> 
-    idle_clients mailbox context >>
+    idle_clients mailbox context >>= fun () ->
     response context None (Resp_Ok(None, "COPY completed")) None
 
 let handle_expunge context =
@@ -598,7 +598,7 @@ let handle_expunge context =
   | `NotSelectable ->  response context  None (Resp_No(None,"Mailbox is not selectable")) None
   | `Error e -> response context None (Resp_No(None,e)) None
   | `Ok -> 
-    idle_clients (selected_mailbox_exn !(context.mailbox)) context >>
+    idle_clients (selected_mailbox_exn !(context.mailbox)) context >>= fun () ->
     response context None (Resp_Ok(None, "EXPUNGE completed")) None
 
 (**
@@ -722,9 +722,9 @@ let rec read_network context buffer =
       ) >>= fun () ->
       let str = String.create len in
       Lwt.pick [
-        Lwt_mutex.lock context.client_timed_out >> return `Done;
-        Lwt_unix.sleep 5.0 >> return `Timeout; 
-        Lwt_io.read_into_exactly !(context.netr) str 0 len >> return (`Ok (uncompress context str))
+        Lwt_mutex.lock context.client_timed_out >>= fun () ->return `Done;
+        Lwt_unix.sleep 5.0 >>= fun () ->return `Timeout; 
+        Lwt_io.read_into_exactly !(context.netr) str 0 len >>= fun () ->return (`Ok (uncompress context str))
       ] >>= function
       | `Ok str ->
         Buffer.add_string buffer str;
@@ -824,14 +824,14 @@ let rec client_requests msgt context =
     | `Done -> return `Done
     | `Error e -> 
       Log_.log `Error (e ^ "\n");
-      write_resp !(context.compression) context.id !(context.netw) (Resp_Bad(None,e)) >> client_requests msgt context
+      write_resp !(context.compression) context.id !(context.netw) (Resp_Bad(None,e)) >>= fun () ->client_requests msgt context
     | `Ok -> handle_command context >>= fun response ->
       if !(context.state) = State_Logout then
         return `Done
       else (
         let command = Stack.top !(context.commands) in
-        write_resp !(context.compression) context.id !(context.netw) ~tag:command.tag response >>
-        set_compression context command >>
+        write_resp !(context.compression) context.id !(context.netw) ~tag:command.tag response >>= fun () ->
+        set_compression context command >>= fun () ->
         client_requests msgt context 
       )
   )
@@ -844,7 +844,7 @@ let rec client_requests msgt context =
 let rec maintenance config =
   let open Server_config in
   catch (fun () ->
-    Lwt_unix.sleep config.idle_interval >>
+    Lwt_unix.sleep config.idle_interval >>= fun () ->
     Connections.fold (fun acc ctx ->
       acc >>= fun () ->
       let now = Unix.gettimeofday () in

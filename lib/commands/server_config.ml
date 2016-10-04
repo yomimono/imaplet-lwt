@@ -136,7 +136,7 @@ let validate_config config =
   | `Mailbox ->
     let path = Regex.replace ~regx:"%user%.*$" ~tmpl:"" config.inbox_path in
     Utils.exists path Unix.S_REG >>= fun res ->
-    err res "Invalid Inbox path in " >>= fun () ->
+    err res "Invalid Inbox path in " >>= fun _ ->
     let path = Regex.replace ~regx:"%user%.*$" ~tmpl:"" config.mail_path in
     Utils.exists path Unix.S_DIR >>= fun res ->
     err res "Invalid Mail path in "

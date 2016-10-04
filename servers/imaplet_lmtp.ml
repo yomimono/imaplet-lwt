@@ -84,7 +84,7 @@ let send_to_imap from_ to_ msg =
   write "a logout\r\n" >>= fun () ->
   read () >>= fun resp -> Printf.printf "imaplet_lmtp response: %s\n%!" resp; (* * BYE *)
   Lwt_unix.close socket >>= fun () ->
-  try_close inchan >> try_close outchan >> return ()
+  try_close inchan >>= fun () ->try_close outchan >> return ()
 
 (*
  From dovecot@localhost.local  Thu Jul 17 14:53:00 2014
@@ -195,7 +195,7 @@ let process socket =
           Lwt_io.write outchan "220 LMTP server ready\r\n" >>= fun () -> 
             requests inchan outchan (Buffer.create 0) ("","",`Start) >>= fun () ->
               Lwt_unix.close socket_cli >>= fun () ->
-              try_close inchan >> try_close outchan >> return ()
+              try_close inchan >>= fun () ->try_close outchan >> return ()
             );
         _process ()
       )

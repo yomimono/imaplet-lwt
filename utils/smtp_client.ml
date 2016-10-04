@@ -58,7 +58,7 @@ let post archive from rcpt f =
     in
     (*feeder () >>= fun _ -> ignore the from postmark *)
     f ~from ~rcpt feeder >>= function
-    | `Ok -> Lwt_io.close ic >> return (`Ok (cnt+1))
+    | `Ok -> Lwt_io.close ic >>= fun () ->return (`Ok (cnt+1))
     | `Error err ->
       Printf.printf "error %s\n%!" err;
       Lwt_io.close ic >>= fun () ->

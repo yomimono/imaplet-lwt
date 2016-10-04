@@ -91,6 +91,6 @@ let get_system_keys config =
 
 (* initialize ssl, create certificate *)
 let init_ssl config =  
-  Nocrypto_entropy_lwt.initialize () >>
+  Nocrypto_entropy_lwt.initialize () >>= fun () ->
   create_cert config >>= fun cert ->
   return (`Single cert)

@@ -241,7 +241,7 @@ let read_file_ext file =
   Lwt_unix.openfile file [O_RDONLY;O_NONBLOCK] 0o644 >>= fun lfd ->
   let fd = Lwt_unix.unix_file_descr lfd in
   let ba = Lwt_bytes.map_file ~fd ~shared:false () in
-  Lwt_unix.close lfd >>
+  Lwt_unix.close lfd >>= fun () ->
   return (Mstruct.of_bigarray ba)
 
 let preemptive ?(preempt=false) f =

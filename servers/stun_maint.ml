@@ -215,7 +215,7 @@ let get_interfaces () =
 let start config =
   async (fun () ->
     let rec maint time =
-      Lwt_unix.sleep time >>
+      Lwt_unix.sleep time >>= fun () ->
       get_interfaces () >>= fun intfs ->
       Lwt_list.fold_left_s (fun acc privateaddr ->
         let pubaddr = ref "" in

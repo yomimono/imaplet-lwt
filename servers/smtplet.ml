@@ -57,8 +57,8 @@ let authenticate_user ?(b64=false) user ?password () =
   )
 
 let imap_write (ic,oc) _to pswd msg =
-  Lwt_io.write oc (Printf.sprintf "a lappend %s%s INBOX {%d+}\r\n" _to pswd (String.length msg)) >>
-  Lwt_io.write oc msg >>
+  Lwt_io.write oc (Printf.sprintf "a lappend %s%s INBOX {%d+}\r\n" _to pswd (String.length msg)) >>= fun () ->
+  Lwt_io.write oc msg >>= fun () ->
   Lwt_io.read_line ic >>= fun _ ->
   return ()
 
@@ -69,7 +69,7 @@ let imap_async_write (ic,oc) strm =
   let rec loop () =
     Lwt_stream.get strm >>= function
     | Some (_to,pswd,msg) ->
-      imap_write (ic,oc) _to pswd msg >>
+      imap_write (ic,oc) _to pswd msg >>= fun () ->
       loop ()
     | None -> return ()
   in
@@ -115,12 +115,12 @@ let send_to_imap context =
 let write context msg = 
   Log_.log `Info1 (Printf.sprintf "<-- %s\n" msg);
   let (_,w,_) = context.io in
-  Lwt_io.write w msg >>
+  Lwt_io.write w msg >>= fun () ->
   Lwt_io.write w "\r\n" 
 
 let write_return context msg log res =
   log res;
-  write context msg >>
+  write context msg >>= fun () ->
   return res
 
 let log_return log res =
@@ -135,7 +135,7 @@ let read context =
   ) (function
     | Canceled ->
       Lazy.force lazy_hostname >>= fun host ->
-      write context ("421 4.4.2 " ^ host ^ " Error: timeout exceeded") >>
+      write context ("421 4.4.2 " ^ host ^ " Error: timeout exceeded") >>= fun () ->
       return None
     | ex -> Log_.log `Error 
       (Printf.sprintf "smtp:read exception %s\n" (Printexc.to_string ex));
@@ -193,7 +193,7 @@ let syntx_ehlo log next_state ~msg str context =
       (*else
         host :: cap*)
     in
-    Lwt_list.iter_s (fun c -> write context c) cap >>
+    Lwt_list.iter_s (fun c -> write context c) cap >>= fun () ->
     log_return log `Ehlo
   ) else (
     write_return context "501 5.5.2 Syntax: EHLO hostname" log `Next
@@ -580,7 +580,7 @@ let rec datastream context =
           return acc
         )
       ) true context.rcpt >>= fun res ->
-      write context (if res then "250 OK" else "554 5.5.0 Transaction failed") >>
+      write context (if res then "250 OK" else "554 5.5.0 Transaction failed") >>= fun () ->
       return `Rset
     ) else (
       Buffer.add_string context.buff str;
@@ -614,10 +614,10 @@ let authenticate text ?password context =
     authenticate_user ~b64:true text ~password ()
   end >>= fun (user,pswd,auth) ->
   if auth then (
-    write context "235 2.7.0 Authentication successful" >>
+    write context "235 2.7.0 Authentication successful" >>= fun () ->
     return (`Authenticated (user,pswd))
   ) else (
-    write context "535 5.7.8 Authentication failed" >>
+    write context "535 5.7.8 Authentication failed" >>= fun () ->
     return `Rset
   )
 
@@ -708,7 +708,7 @@ let rec start context =
   | cmd -> all (start) context cmd
 
 let greeting context =
-  write context "220 server ESMTP smtplet" >>
+  write context "220 server ESMTP smtplet" >>= fun () ->
   let rec run state context =
     state context >>= function
     | `Quit -> return ()

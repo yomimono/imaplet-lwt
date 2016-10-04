@@ -104,8 +104,8 @@ let write_compressed_block w strm buff_in offset_in len_in buff_out len_out =
       buff_out 0 len_out Zlib.Z_SYNC_FLUSH in
   Log_.log `Info2 (Printf.sprintf " -- writing compressed data %b %d %d %d %d\n" 
       fi used_in used_out offset_in len_in);
-  Lwt_io.write w (String.sub buff_out 0 used_out) >>
-  Lwt_io.flush w >>
+  Lwt_io.write w (String.sub buff_out 0 used_out) >>= fun () ->
+  Lwt_io.flush w >>= fun () ->
   return (fi,used_in,used_out)
 
 let write_compressed w strm resp =

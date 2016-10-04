@@ -44,7 +44,7 @@ let init_unix_socket file =
   let socket = socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   setsockopt socket Unix.SO_REUSEADDR true;
   bind socket sockaddr;
-  chmod file 0o777 >>
+  chmod file 0o777 >>= fun () ->
   return socket
 
 let create_srv_socket addr =
@@ -127,12 +127,12 @@ let starttls_client host sock () =
 let client_send addr f init =
   let open Lwt_unix in
   let (socket,sockaddr) = create_clnt_socket addr in
-  Lwt_unix.connect socket sockaddr >>
+  Lwt_unix.connect socket sockaddr >>= fun () ->
   let inchan = Lwt_io.of_fd ~mode:Lwt_io.input socket in
   let outchan = Lwt_io.of_fd ~mode:Lwt_io.output socket in
   f init socket inchan outchan >>= fun acc ->
-  Lwt_unix.close socket >>
-  try_close inchan >> try_close outchan >>
+  Lwt_unix.close socket >>= fun () ->
+  try_close inchan >> try_close outchan >>= fun () ->
   return acc
 
 let client_send_dgram ?interface addr f init =
@@ -162,7 +162,7 @@ let server addr config f err =
     Log_.log `Debug (Printf.sprintf "socket: accepted client connection %s\n" (addr_to_string addr));
     async ( fun () ->
       catch( fun () ->
-        f sock_c netr netw >>
+        f sock_c netr netw >>= fun () ->
         try_close netr >> try_close netw >> try_close_sock sock_c
       ) 
       (function ex -> try_close netr >> try_close netw >> try_close_sock sock_c >> err ex)

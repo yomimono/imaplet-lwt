@@ -237,8 +237,8 @@ let create_mailbox mailboxt mailbox =
         return (`Error("Invalid mailbox name: Contains . part"))
       else 
       (
-        Mailbox.MailboxStorage.create_mailbox Mailbox.this >> 
-        Mailbox.MailboxStorage.commit Mailbox.this >>
+        Mailbox.MailboxStorage.create_mailbox Mailbox.this >>= fun () ->
+        Mailbox.MailboxStorage.commit Mailbox.this >>= fun () ->
         return `Ok
       )
   in
@@ -256,8 +256,8 @@ let delete_mailbox mailboxt mailbox =
   Mailbox.MailboxStorage.exists Mailbox.this >>= function
   | `No -> return (`Error("Mailbox doesn't exist"))
   | _ ->
-    Mailbox.MailboxStorage.delete Mailbox.this >>
-    Mailbox.MailboxStorage.commit Mailbox.this >>
+    Mailbox.MailboxStorage.delete Mailbox.this >>= fun () ->
+    Mailbox.MailboxStorage.commit Mailbox.this >>= fun () ->
     return `Ok
 
 (* rename mailbox *)
@@ -268,9 +268,9 @@ let rename_mailbox mailboxt src dest =
   | _ ->
     Mailbox.MailboxStorage.exists (Utils.option_value_exn Mailbox.this2) >>= function
     | `No ->
-      Mailbox.MailboxStorage.rename Mailbox.this dest >>
-      Mailbox.MailboxStorage.commit Mailbox.this >>
-      Mailbox.MailboxStorage.commit (Utils.option_value_exn Mailbox.this2) >>
+      Mailbox.MailboxStorage.rename Mailbox.this dest >>= fun () ->
+      Mailbox.MailboxStorage.commit Mailbox.this >>= fun () ->
+      Mailbox.MailboxStorage.commit (Utils.option_value_exn Mailbox.this2) >>= fun () ->
       return `Ok
     | _ -> return (`Error ("Destination mailbox exists"))
 
@@ -280,8 +280,8 @@ let subscribe mailboxt mailbox =
   Mailbox.MailboxStorage.exists Mailbox.this >>= function
   | `No -> return (`Error("Mailbox doesn't exist"))
   | _ ->
-    Mailbox.MailboxStorage.subscribe Mailbox.this >>
-    Mailbox.MailboxStorage.commit Mailbox.this >>
+    Mailbox.MailboxStorage.subscribe Mailbox.this >>= fun () ->
+    Mailbox.MailboxStorage.commit Mailbox.this >>= fun () ->
     return `Ok
 
 (* unsubscribe mailbox *)
@@ -290,15 +290,15 @@ let unsubscribe mailboxt mailbox =
   Mailbox.MailboxStorage.exists Mailbox.this >>= function
   | `No -> return (`Error("Mailbox doesn't exist"))
   | _ ->
-    Mailbox.MailboxStorage.unsubscribe Mailbox.this >>
-    Mailbox.MailboxStorage.commit Mailbox.this >>
+    Mailbox.MailboxStorage.unsubscribe Mailbox.this >>= fun () ->
+    Mailbox.MailboxStorage.commit Mailbox.this >>= fun () ->
     return `Ok
 
 let get_message_from_client reader writer compression literal =
   (** request the message from the client **)
   begin
     match literal with
-    | Literal n -> Response.write_resp compression Int64.zero writer (Resp_Cont("")) >> return n
+    | Literal n -> Response.write_resp compression Int64.zero writer (Resp_Cont("")) >>= fun () ->return n
     | LiteralPlus n -> return n
   end >>= fun size ->
   let message = String.create size in
@@ -349,15 +349,15 @@ let append_message mailboxt mailbox message size flags date =
     ;
     modseq
   } in
-  Mailbox.MailboxStorage.store_mailbox_metadata Mailbox.this mailbox_metadata >>
-  Mailbox.MailboxStorage.append Mailbox.this message message_metadata >>
+  Mailbox.MailboxStorage.store_mailbox_metadata Mailbox.this mailbox_metadata >>= fun () ->
+  Mailbox.MailboxStorage.append Mailbox.this message message_metadata >>= fun () ->
   Mailbox.MailboxStorage.commit Mailbox.this
 
 let async_append strm =
   let rec append () =
     Lwt_stream.get strm >>= function
     | Some (mailboxt,mailbox,message,size,flags,date) ->
-      append_message mailboxt mailbox message size flags date >>
+      append_message mailboxt mailbox message size flags date >>= fun () ->
       append ()
     | None -> return ()
   in
@@ -375,7 +375,7 @@ let append mailboxt mailbox reader writer push_append_strm compression flags dat
   | Some push_append_strm -> 
     push_append_strm (Some (mailboxt,mailbox,message,size,flags,date));
     return `Ok
-  | None -> append_message mailboxt mailbox message size flags date >> return `Ok
+  | None -> append_message mailboxt mailbox message size flags date >>= fun () ->return `Ok
 
 (* close selected mailbox *)
 let close mailboxt =
@@ -442,7 +442,7 @@ let search mailboxt resp_prefix keys buid =
   | `NotSelectable -> return `NotSelectable
   | `Error e -> return (`Error e)
   | `Ok (_,(module Mailbox)) ->
-    resp_prefix () >>
+    resp_prefix () >>= fun () ->
     let sequence = [SeqRange (Number 1,Wild)] in
     iter_selected_with_seq (module Mailbox) sequence buid (fun (modseq,acc) pos seq ->
       Mailbox.MailboxStorage.fetch Mailbox.this pos >>= function
@@ -512,13 +512,12 @@ let fetch mailboxt resp_prefix resp_writer sequence fetchattr changedsince buid 
   | `Error e -> return (`Error e)
   | `Ok (_,(module Mailbox)) ->
     let fetchattr = update_fetch_attr fetchattr changedsince buid in
-    resp_prefix () >>
+    resp_prefix () >>= fun () ->
     let (strm,push_strm) = Lwt_stream.create () in
     let mutex = Lwt_mutex.create () in
     Lwt_mutex.lock mutex >>= fun () ->
-    lwt _ =
-    begin
-    let t = Unix.gettimeofday() in
+    Lwt.join [
+    (let t = Unix.gettimeofday() in
     iter_selected_with_seq (module Mailbox) sequence buid (fun acc pos seq ->
       Mailbox.MailboxStorage.fetch Mailbox.this pos >>= function
       | `Eof -> return (`Eof acc)
@@ -532,21 +531,16 @@ let fetch mailboxt resp_prefix resp_writer sequence fetchattr changedsince buid 
         Stats.add_fetcht diff;
         Log_.log `Info3 (Printf.sprintf "### fetch time %d\n" (toscaleint diff));
         match res with
-        | Some res -> push_strm (Some res); Lwt_main.yield()>>return (`Ok acc)
+        | Some res -> push_strm (Some res); Lwt_main.yield() >>= fun () -> return (`Ok acc)
         | None -> return (`Ok acc)
     ) () >>= fun _ -> 
     Log_.log `Info1 (Printf.sprintf "### iter except write %.04f\n" (Unix.gettimeofday() -. t));
     push_strm None;
-    return ()
-    end
-    and
-    _ =  
-    begin
-    dump_fetch strm resp_writer >>= fun () ->
+    return ());
+    (dump_fetch strm resp_writer >>= fun () ->
     Lwt_mutex.unlock mutex;
-    return ()
-    end in
-    Lwt_mutex.lock mutex >>
+    return ()) ] >>= fun () ->
+    Lwt_mutex.lock mutex >>= fun () ->
     return `Ok
 
 (* get mailbox_metadata flag status 
@@ -588,7 +582,7 @@ let store mailboxt resp_prefix resp_writer sequence storeattr flagsval unchanged
   | `NotSelectable -> return `NotSelectable
   | `Error e -> return (`Error e)
   | `Ok (_,(module Mailbox)) ->
-  resp_prefix () >>
+  resp_prefix () >>= fun () ->
   Mailbox.MailboxStorage.status Mailbox.this >>= fun mailbox_metadata ->
   iter_selected_with_seq (module Mailbox) sequence buid (fun (modified,mailbox_metadata) pos seq ->
     Mailbox.MailboxStorage.fetch_message_metadata Mailbox.this pos >>= function
@@ -604,7 +598,7 @@ let store mailboxt resp_prefix resp_writer sequence storeattr flagsval unchanged
           mailbox_metadata with modseq
         } in
         let message_metadata = {upd_message_metadata with modseq} in
-        Mailbox.MailboxStorage.store Mailbox.this pos message_metadata >>
+        Mailbox.MailboxStorage.store Mailbox.this pos message_metadata >>= fun () ->
         return mailbox_metadata
       in
       match Interpreter.exec_store message_metadata seq sequence storeattr flagsval unchangedsince buid with
@@ -614,12 +608,12 @@ let store mailboxt resp_prefix resp_writer sequence storeattr flagsval unchanged
         update_metadata mailbox_metadata message_metadata metadata >>= 
         fun mailbox_metadata -> return (`Ok (modified,mailbox_metadata))
       | `Ok (metadata,res) -> 
-        resp_writer res >>
+        resp_writer res >>= fun () ->
         update_metadata mailbox_metadata message_metadata metadata >>=
         fun mailbox_metadata -> return (`Ok (modified,mailbox_metadata))
   ) ([],mailbox_metadata) >>= fun (modified,mailbox_metadata) ->
-  Mailbox.MailboxStorage.store_mailbox_metadata Mailbox.this mailbox_metadata >>
-  Mailbox.MailboxStorage.commit Mailbox.this >>
+  Mailbox.MailboxStorage.store_mailbox_metadata Mailbox.this mailbox_metadata >>= fun () ->
+  Mailbox.MailboxStorage.commit Mailbox.this >>= fun () ->
   return (`Ok modified)
 
 (* copy messages to mailbox *)
@@ -675,11 +669,11 @@ let copy mailboxt dest_mbox sequence buid =
       }
       in
       (* copy message to the destination mailbox *)
-      Mailbox.MailboxStorage.copy Mailbox.this pos mbox2 message_metadata >>
+      Mailbox.MailboxStorage.copy Mailbox.this pos mbox2 message_metadata >>= fun () ->
       return (`Ok mailbox_metadata2)
   ) mailbox_metadata2 >>= fun mailbox_metadata2 ->
-  Mailbox.MailboxStorage.store_mailbox_metadata mbox2 mailbox_metadata2 >>
-  Mailbox.MailboxStorage.commit mbox2 >>
+  Mailbox.MailboxStorage.store_mailbox_metadata mbox2 mailbox_metadata2 >>= fun () ->
+  Mailbox.MailboxStorage.commit mbox2 >>= fun () ->
   return `Ok
 
 (* permanently remove messages with \Deleted flag *)
@@ -723,11 +717,11 @@ let expunge mailboxt resp_writer =
       } in
       return (`Ok mailbox_metadata)
     else (
-      Mailbox.MailboxStorage.delete_message Mailbox.this pos >>
-      resp_writer (string_of_int seq) >>
+      Mailbox.MailboxStorage.delete_message Mailbox.this pos >>= fun () ->
+      resp_writer (string_of_int seq) >>= fun () ->
       return (`Ok mailbox_metadata)
     )
   ) {mailbox_metadata with count=0;recent=0;nunseen=0;unseen=0} >>= fun mailbox_metadata ->
-    Mailbox.MailboxStorage.store_mailbox_metadata Mailbox.this mailbox_metadata >>
-    Mailbox.MailboxStorage.commit Mailbox.this >>
+    Mailbox.MailboxStorage.store_mailbox_metadata Mailbox.this mailbox_metadata >>= fun () ->
+    Mailbox.MailboxStorage.commit Mailbox.this >>= fun () ->
     return `Ok

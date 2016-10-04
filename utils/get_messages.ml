@@ -120,7 +120,7 @@ let output message label outfiles = function
       return (MapStr.add label co outfiles,co)
     )
     end >>= fun (outfiles,co) ->
-    Lwt_io.fprintf co "%s%!" message >>
+    Lwt_io.fprintf co "%s%!" message >>= fun () ->
     return outfiles
 
 let rec get_random exists size =

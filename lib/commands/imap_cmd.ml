@@ -83,7 +83,7 @@ let inflate strm oc_pipe inbuff =
     let (fi, used_in, used_out) = Zlib.inflate strm inbuff offset len 
       outbuff 0 buff_size Zlib.Z_SYNC_FLUSH in
     Log_.log `Info3 (Printf.sprintf "### processed compressed data so far %b %d %d\n" fi used_in used_out);
-    Lwt_io.write oc_pipe (String.sub outbuff 0 used_out) >>
+    Lwt_io.write oc_pipe (String.sub outbuff 0 used_out) >>= fun () ->
     Lwt_io.flush oc_pipe >>= fun () ->
     let offset = offset + used_in in
     let len = len - used_in in
@@ -262,7 +262,7 @@ let handle_noop context =
     ) else
       return ()
   | _ -> return ()
-  end >>
+  end >>= fun () ->
   response context None (Resp_Ok (None, "NOOP completed")) None
 
 let handle_done context =
@@ -290,7 +290,7 @@ let handle_authenticate context auth_type text =
   | None ->
     write_resp context.!compression context.id context.!netw (Resp_Cont("")) >>
     Lwt.pick [
-      Lwt_mutex.lock context.client_timed_out >> raise ClientTimedOut;
+      Lwt_mutex.lock context.client_timed_out >>= fun () -> raise ClientTimedOut;
       zip_read_exn context
     ]
   end >>= fun text ->
@@ -544,7 +544,7 @@ let handle_search context charset search buid =
         s 
       else 
         s ^ " " ^ acc) "" r
-    ) ^ modseq)) >>
+    ) ^ modseq)) >>= fun () ->
     let resp = Printf.sprintf "SEARCH completed %02fsec" (Unix.gettimeofday () -. t) in
     response context None (Resp_Ok(None, resp)) None
 
@@ -671,7 +671,7 @@ let rec read_network context buffer =
   begin
   catch ( fun () ->
     Lwt.pick [
-      Lwt_mutex.lock context.client_timed_out >> return `Done;
+      Lwt_mutex.lock context.client_timed_out >>= fun () -> return `Done;
       zip_read context
     ]
   )
@@ -719,7 +719,7 @@ let rec read_network context buffer =
         write_resp context.!compression context.id context.!netw (Resp_Cont(""))
       else
         return ()
-      ) >>
+      ) >>= fun () ->
       let str = String.create len in
       Lwt.pick [
         Lwt_mutex.lock context.client_timed_out >> return `Done;
@@ -862,4 +862,4 @@ let rec maintenance config =
   (fun ex -> 
     Log_.log `Error (Printf.sprintf "### maintenance error: %s\n" (Printexc.to_string ex));
     return ()
-  ) >> maintenance config
+  ) >>= fun () -> maintenance config

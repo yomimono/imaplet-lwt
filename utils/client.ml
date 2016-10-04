@@ -135,7 +135,7 @@ let get_script file user =
       | `Ok -> Lwt_stream.junk strm >> header strm
       | `Done -> return ()
   in
-  header strm >>
+  header strm >>= fun () ->
   return strm
 
 (* parse command line arguments and pass to the callback *)
@@ -162,7 +162,7 @@ let socket addr port =
 
 (* connect via ssl *)
 let ssl_socket addr port =
-  Nocrypto_entropy_lwt.initialize () >>
+  Nocrypto_entropy_lwt.initialize () >>= fun () ->
   X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun auth ->
   Tls_lwt.connect auth (addr,port)
 
@@ -226,7 +226,7 @@ let zip_read ?count ic =
     | None -> Lwt_io.read_line_opt ic 
     | Some count -> 
       let buff = Bytes.create count in
-      Lwt_io.read_into_exactly ic buff 0 count >>
+      Lwt_io.read_into_exactly ic buff 0 count >>= fun () ->
       return (Some buff)
   ) else (
     (* initialize zlib *)
@@ -271,9 +271,9 @@ let send_append ic oc mailbox messages =
     let sz = if !_dovecot then 1 else 2 in
     let cmd = 
       Printf.sprintf "A%d APPEND %s {%d+}" cnt mailbox (String.length message + sz) in
-    write_echo oc cmd >>
-    write_echo oc message >>
-    read_net_echo ic >>
+    write_echo oc cmd >>= fun () ->
+    write_echo oc message >>= fun () ->
+    read_net_echo ic >>= fun () ->
     return (cnt + 1)
   ) messages 1
 
@@ -318,12 +318,12 @@ let exec_command strm ic oc =
     let re_sleep = Re_posix.compile_pat "^sleep[ \t]+([0-9]+)$" in
     if Re.execp re_append command then (
       let subs = Re.exec re_append command in
-      handle_append ic oc (Re.get subs 1) (Re.get subs 4) >>
+      handle_append ic oc (Re.get subs 1) (Re.get subs 4) >>= fun () ->
       return `OkAppend
     ) else if Re.execp re_sleep command then (
       Printf.fprintf stderr "%s\n%!" command;
       let subs = Re.exec re_sleep command in
-      Lwt_unix.sleep (float_of_string (Re.get subs 1)) >>
+      Lwt_unix.sleep (float_of_string (Re.get subs 1)) >>= fun () ->
       return `OkSleep
     ) else (
       write_echo oc command >> return (`Ok (is_compression command))
@@ -390,7 +390,7 @@ let () =
         Lwt_mutex.lock mutex 
       ) else 
         return ()
-      end >>
+      end >>= fun () ->
       (* recursively execute stream commands *)
       let rec exec strm ic oc =
         exec_command strm ic oc >>= function
@@ -404,7 +404,7 @@ let () =
           exec strm ic oc 
         in
       let rec loop () =
-        Lwt_mutex.lock mutex >>
+        Lwt_mutex.lock mutex >>= fun () ->
         Lwt_io.with_file ~mode:Lwt_io.Input script (fun file ->
           (* read the script file into the stream *)
           get_script file user >>= fun strm ->

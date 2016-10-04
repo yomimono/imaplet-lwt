@@ -86,9 +86,9 @@ let build_index user maildir_root mailbox =
   let mailbox_path = Filename.concat maildir_root mailbox in
   let path = Filename.concat mailbox_path "cur" in
   let strm = Lwt_unix.files_of_directory path in
-  create_file ~overwrite:true (Filename.concat mailbox_path "imaplet.uidlst") >>
-  create_file ~overwrite:true (Filename.concat mailbox_path "imaplet.keywords") >>
-  create_file ~overwrite:true (Filename.concat mailbox_path "imaplet.meta") >>
+  create_file ~overwrite:true (Filename.concat mailbox_path "imaplet.uidlst") >>= fun () ->
+  create_file ~overwrite:true (Filename.concat mailbox_path "imaplet.keywords") >>= fun () ->
+  create_file ~overwrite:true (Filename.concat mailbox_path "imaplet.meta") >>= fun () ->
   create_file ~overwrite:true (Filename.concat mailbox_path "imaplet.subscribe") >>= fun () ->
   Lwt_stream.fold_s (fun i acc -> 
     if i = "." || i = ".." then
@@ -109,7 +109,7 @@ let build_index user maildir_root mailbox =
     let new_name = make_message_file_name "" 
       {uid=metadata.uidnext;modseq=Int64.zero;internal_date=Dates.ImapTime.of_float date;size;flags;}
     in
-    append_uidlist (Filename.concat mailbox_path "imaplet.uidlst") metadata.uidnext new_name >>
+    append_uidlist (Filename.concat mailbox_path "imaplet.uidlst") metadata.uidnext new_name >>= fun () ->
     get_message (Filename.concat path file) >>= fun message ->
     Lwt_unix.rename (Filename.concat path file) (Filename.concat path new_name) >>= fun () ->
     write_message (Filename.concat path new_name) message >>= fun () ->

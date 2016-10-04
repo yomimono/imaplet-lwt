@@ -212,7 +212,7 @@ let with_file ?(lock=false) path ~flags ~perms ~mode ~f =
   let ch = Lwt_io.of_fd ~close:(fun () -> return ()) ~mode fd in
   Lwt.finalize (fun () -> f ch)
   (fun () -> 
-    _unlock lock fd >>
+    _unlock lock fd >>= fun () ->
     Lwt_io.close ch >> Lwt_unix.close fd
   )
 

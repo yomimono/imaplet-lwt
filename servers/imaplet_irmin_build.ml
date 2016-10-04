@@ -124,7 +124,7 @@ let rec listdir path mailbox f =
       let mailbox = Filename.concat mailbox i in
       Lwt_unix.stat path >>= fun stat ->
       if stat.Lwt_unix.st_kind = Lwt_unix.S_DIR then
-        f true path mailbox >>
+        f true path mailbox >>= fun () ->
         listdir path mailbox f 
       else
         f false path mailbox
@@ -146,12 +146,12 @@ let create_mailbox user ?uidvalidity mailbox =
   with_timer (fun() -> 
   get_keys user >>= fun keys ->
   IrminStorage.create srv_config (get_user user) mailbox keys >>= fun ist ->
-  IrminStorage.create_mailbox ist >>
+  IrminStorage.create_mailbox ist >>= fun () ->
   return ist) >>= fun ist ->
   match uidvalidity with
   | Some uidvalidity ->
     let metadata = empty_mailbox_metadata ~uidvalidity () in
-    IrminStorage.store_mailbox_metadata ist metadata >>
+    IrminStorage.store_mailbox_metadata ist metadata >>= fun () ->
     return ist
   | None -> return ist
 
@@ -181,8 +181,8 @@ let append ist ?uid message size flags mailbox =
     modseq
   } in
   with_timer (fun() -> 
-  IrminStorage.store_mailbox_metadata ist mailbox_metadata >>
-  IrminStorage.append ist message message_metadata >>
+  IrminStorage.store_mailbox_metadata ist mailbox_metadata >>= fun () ->
+  IrminStorage.append ist message message_metadata >>= fun () ->
   IrminStorage.commit ist)
   )
   (fun ex -> Printf.fprintf stderr "append exception: %s %s\n%!" (Printexc.to_string ex) (Printexc.get_backtrace()); return ())
@@ -226,7 +226,7 @@ let append_messages ist path flags =
     else (
       let (_,email) = Utils.make_postmark_email message in
       let size = String.length email in
-      append ist message size flags "" >>
+      append ist message size flags "" >>= fun () ->
       return (`Ok acc)
     )
   ) ()
@@ -337,7 +337,7 @@ let append_archive_messages user path filter flags isappend =
       create_mailbox user mailbox
     )
     end >>= fun ist ->
-    append ist message size (List.concat [flags;fl]) mailbox >>
+    append ist message size (List.concat [flags;fl]) mailbox >>= fun () ->
     return ()
  ) strm ()
 
@@ -423,13 +423,13 @@ let populate_maildir_msgs ist path flagsmap uidmap =
       append_maildir_message ist ?uid (Filename.concat path name) flags
     ) acc
   in
-  populate ist (Filename.concat path "new") [Flags_Recent] flagsmap uidmap >>
+  populate ist (Filename.concat path "new") [Flags_Recent] flagsmap uidmap >>= fun () ->
   populate ist (Filename.concat path "cur") [] flagsmap uidmap 
 
 let create_inbox user inbx =
   Printf.printf "creating mailbox: INBOX\n%!";
   create_mailbox user "INBOX" >>= fun ist ->
-  populate_mbox_msgs ist inbx >>
+  populate_mbox_msgs ist inbx >>= fun () ->
   with_timer(fun() -> IrminStorage.commit ist)
 
 let create_account user subscriptions =
@@ -442,7 +442,7 @@ let create_account user subscriptions =
     let strm = Lwt_io.lines_of_file subscriptions in
     Lwt_stream.iter_s (fun line -> 
       IrminStorage.create srv_config (get_user user) line keys >>= fun ist ->
-      IrminStorage.subscribe ist >>
+      IrminStorage.subscribe ist >>= fun () ->
       IrminStorage.commit ist
     ) strm
   ) (fun _ -> return ())
@@ -485,7 +485,7 @@ let get_dovecot_params path =
 
 (* irmin supports both mailbox and folders under the mailbox *)
 let create_mbox user inbox mailboxes filter =
-  create_inbox user inbox >>
+  create_inbox user inbox >>= fun () ->
   listdir mailboxes "/" (fun is_dir path mailbox ->
     Printf.printf "creating mailbox: %s\n%!" mailbox;
     create_mailbox user mailbox >>= fun ist ->
@@ -494,7 +494,7 @@ let create_mbox user inbox mailboxes filter =
       return ()
     else
       populate_mbox_msgs ist path
-    end >>
+    end >>= fun () ->
     with_timer(fun() -> IrminStorage.commit ist)
   )
 
@@ -536,15 +536,15 @@ let () =
         match mbx with
         | `Mbox (inbox,mailboxes) -> 
           Printf.printf "porting from mbox\n%!";
-          (if isappend then return () else create_account user (Filename.concat mailboxes ".subscriptions")) >>
+          (if isappend then return () else create_account user (Filename.concat mailboxes ".subscriptions")) >>= fun () ->
           create_mbox user inbox mailboxes filter 
         | `Maildir (mailboxes,fs) -> 
           Printf.printf "porting from maildir\n%!";
-          (if isappend then return () else create_account user (Filename.concat mailboxes "subscriptions")) >>
+          (if isappend then return () else create_account user (Filename.concat mailboxes "subscriptions")) >>= fun () ->
           create_maildir user mailboxes fs filter 
         | `Archive mailbox ->
           Printf.printf "porting from archive\n%!";
-          (if isappend then return () else create_account user (Filename.concat mailbox "subscriptions")) >>
+          (if isappend then return () else create_account user (Filename.concat mailbox "subscriptions")) >>= fun () ->
           create_archive_maildir user mailbox filter isappend
       )
       (fun ex -> Printf.fprintf stderr "exception: %s %s\n%!" (Printexc.to_string ex)

@@ -58,6 +58,7 @@ let get_level v =
     None
 
 exception InvalidStoreType
+exception Base64DecodingFailure
 
 let get_store = function
   | "irmin" -> `Irmin
@@ -108,7 +109,9 @@ let parse_users buff user password =
 
 let b64decode b64 =
    (*let buff = Str.global_replace (Str.regexp "=$") "" b64 in*)
-   Cstruct.to_string (Nocrypto.Base64.decode (Cstruct.of_string b64))
+   match Nocrypto.Base64.decode (Cstruct.of_string b64) with
+   | None -> raise Base64DecodingFailure
+   | Some buf -> Cstruct.to_string buf
 
 let parse_user_b64 b64 =
   let buff = b64decode b64 in (** need to log this if it fails **)

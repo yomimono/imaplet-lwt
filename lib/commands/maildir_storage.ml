@@ -186,7 +186,7 @@ let write_mailbox_metadata path metadata =
   with_lock path (fun () ->
     Lwt_io.with_file path ~flags:[O_NONBLOCK;O_WRONLY;O_TRUNC] ~mode:Lwt_io.Output 
     (fun co ->
-      Lwt_io.write co (Sexp.to_string (sexp_of_mailbox_metadata metadata)) >>
+      Lwt_io.write co (Sexp.to_string (sexp_of_mailbox_metadata metadata)) >>= fun () ->
       Lwt_io.flush co)
   )
 
@@ -246,7 +246,7 @@ let write_subscribe path l =
   with_lock path (fun() ->
   Lwt_io.with_file path ~flags:[O_NONBLOCK;O_WRONLY;O_TRUNC] ~mode:Lwt_io.Output 
     (fun co ->
-      Lwt_io.write co (Sexp.to_string (sexp_of_list (fun s -> sexp_of_string s) l)) >>
+      Lwt_io.write co (Sexp.to_string (sexp_of_list (fun s -> sexp_of_string s) l)) >>= fun () ->
       Lwt_io.flush co
     )
   )
@@ -313,13 +313,13 @@ struct
       Lwt_unix.mkdir (MaildirPath.to_maildir t.mailbox) 0o777
     else
       return ()
-    end >>
-    create_file (MaildirPath.file_path t.mailbox `Metadata ) >>
-    create_file (MaildirPath.file_path t.mailbox `Uidlist ) >>
-    Lwt_unix.mkdir (MaildirPath.file_path t.mailbox (`Cur "") ) 0o777 >>
-    Lwt_unix.mkdir (MaildirPath.file_path t.mailbox (`New "") ) 0o777 >>
-    Lwt_unix.mkdir (MaildirPath.file_path t.mailbox (`Tmp "") ) 0o777 >>
-    update_mailbox_metadata t (empty_mailbox_metadata ~uidvalidity:(new_uidvalidity()) ()) >>
+    end >>= fun () ->
+    create_file (MaildirPath.file_path t.mailbox `Metadata ) >>= fun () ->
+    create_file (MaildirPath.file_path t.mailbox `Uidlist ) >>= fun () ->
+    Lwt_unix.mkdir (MaildirPath.file_path t.mailbox (`Cur "") ) 0o777 >>= fun () ->
+    Lwt_unix.mkdir (MaildirPath.file_path t.mailbox (`New "") ) 0o777 >>= fun () ->
+    Lwt_unix.mkdir (MaildirPath.file_path t.mailbox (`Tmp "") ) 0o777 >>= fun () ->
+    update_mailbox_metadata t (empty_mailbox_metadata ~uidvalidity:(new_uidvalidity()) ()) >>= fun () ->
     update_uidlist t []
 
   (* delete mailbox *)
@@ -441,7 +441,7 @@ struct
     (fun oc ->
       Lwt_io.write oc message) >>= fun () ->
     let cur_file = current t file in
-    Lwt_unix.link tmp_file cur_file >>
+    Lwt_unix.link tmp_file cur_file >>= fun () ->
     Lwt_unix.unlink tmp_file
   
   (* append message(s) to selected mailbox *)
@@ -593,8 +593,8 @@ struct
     else (
       let open Unix in
       Lwt_unix.openfile path [O_NONBLOCK;O_WRONLY;O_CREAT] 0o664 >>= fun fd ->
-      Lwt_unix.close fd >>
-      write_subscribe path [] >>
+      Lwt_unix.close fd >>= fun () ->
+      write_subscribe path [] >>= fun () ->
       return `Ok
     )
     

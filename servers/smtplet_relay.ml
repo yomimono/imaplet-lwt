@@ -71,7 +71,7 @@ let add_stun_header content context =
  * send data to the server
  *)
 let send_data r w context =
-  write_relay w "DATA" >>
+  write_relay w "DATA" >>= fun () ->
   read_relay_rc r "^250\\|354" >>= fun res ->
   if res = `Ok then (
     let content =  add_stun_header (Buffer.contents context.buff) context in
@@ -82,9 +82,9 @@ let send_data r w context =
       catch (fun () ->
         Lwt_io.read_line_opt dc >>= function
         | Some str -> write_relay w str >> send ()
-        | None -> write_relay w "." >>
+        | None -> write_relay w "." >>= fun () ->
           read_relay_rc r "^250" >>= fun res ->
-          write_relay w "QUIT" >>
+          write_relay w "QUIT" >>= fun () ->
           return res
       )
       ( fun ex ->
@@ -101,7 +101,7 @@ let send_data r w context =
 (* send rcptto *)
 let send_rcptto r w context =
   let (user,domain,_) = List.hd context.rcpt in
-  write_relay w (Printf.sprintf "RCPT TO: <%s@%s>" user domain) >>
+  write_relay w (Printf.sprintf "RCPT TO: <%s@%s>" user domain) >>= fun () ->
   read_relay_rc r "^250" >>= fun res ->
   if res = `Ok then
     send_data r w context
@@ -126,7 +126,7 @@ let get_from context =
 (* send from *)
 let send_from r w context =
   let from = get_from context in
-  write_relay w from >>
+  write_relay w from >>= fun () ->
   read_relay_rc r "^250" >>= fun res ->
   if res = `Ok then
     send_rcptto r w context
@@ -156,7 +156,7 @@ let rec read_ehlo r = function
 (* send ehlo *)
 let send_ehlo r w (f:(string list -> [`Ok|`Failure|`PermanentFailure of string] Lwt.t)) =
   Lwt_unix.gethostname () >>= fun host ->
-  write_relay w ("EHLO " ^ host) >>
+  write_relay w ("EHLO " ^ host) >>= fun () ->
   read_ehlo r (`Ok []) >>= function
   | `Ok capabilities ->
     f capabilities
@@ -171,7 +171,7 @@ let is_capability capabilities capability =
 
 (* starttls with the server *)
 let send_starttls ip sock r w context =
-  write_relay w "STARTTLS" >>
+  write_relay w "STARTTLS" >>= fun () ->
   read_relay_rc r "^250\\|220" >>= fun res ->
   if res = `Ok then (
     Log_.log `Info1 (Printf.sprintf "### starting tls to %s\n" ip);
@@ -265,7 +265,7 @@ let rec relay try_stun context on_failure =
     | `Failure ->
       (* retry *)
       Log_.log `Info3 "### relay failure, retrying\n";
-      Lwt_unix.sleep timeout >>
+      Lwt_unix.sleep timeout >>= fun () ->
       relay false {context with rcpt = [(user, domain, relay_rec)]} on_failure
     | `PermanentFailure err -> 
       Log_.log `Info3 "### permanent relay failure\n";

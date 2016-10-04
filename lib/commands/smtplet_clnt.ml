@@ -77,7 +77,7 @@ let read_server_rc t r rc =
  * send data to the server
  *)
 let send_data t1 r w =
-  write_server t1.smtp w "DATA" >>
+  write_server t1.smtp w "DATA" >>= fun () ->
   read_server_rc t1.smtp r "^250\\|354" >>= fun res ->
   if res = `Ok then (
     (* send one line of data at a time *)
@@ -101,7 +101,7 @@ let send_data t1 r w =
 
 (* send rcptto *)
 let send_rcptto t1 r w =
-  write_server t1.smtp w (Printf.sprintf "RCPT TO: <%s>" t1.rcpt) >>
+  write_server t1.smtp w (Printf.sprintf "RCPT TO: <%s>" t1.rcpt) >>= fun () ->
   read_server_rc t1.smtp r "^250" >>= fun res ->
   if res = `Ok then
     send_data t1 r w
@@ -112,14 +112,14 @@ let send_rcptto t1 r w =
 let send_from t r w =
   t.post (fun ~from ~rcpt feeder ->
     let t1 = {smtp = t; from; rcpt; feeder} in
-    write_server t w (Printf.sprintf "MAIL FROM: <%s>" from) >>
+    write_server t w (Printf.sprintf "MAIL FROM: <%s>" from) >>= fun () ->
     read_server_rc t r "^250" >>= fun res ->
     if res = `Ok then
       send_rcptto t1 r w
     else
       return res
   ) >>= fun res ->
-  write_server t w "QUIT" >>
+  write_server t w "QUIT" >>= fun () ->
   return res
 
 (* read ehlo response *)
@@ -145,7 +145,7 @@ let rec read_ehlo t r = function
 (* send ehlo *)
 let send_ehlo t r w (f:(string list -> [`Ok|`Error of string] Lwt.t)) =
   Lwt_unix.gethostname () >>= fun host ->
-  write_server t w ((if t.ehlo then "EHLO " else "HELO ") ^ host) >>
+  write_server t w ((if t.ehlo then "EHLO " else "HELO ") ^ host) >>= fun () ->
   read_ehlo t r (`Ok []) >>= function
   | `Ok capabilities ->
     f capabilities
@@ -159,7 +159,7 @@ let is_capability capabilities capability =
 
 (* starttls with the server *)
 let send_starttls t sock r w =
-  write_server t w "STARTTLS" >>
+  write_server t w "STARTTLS" >>= fun () ->
   read_server_rc t r "^250\\|220" >>= fun res ->
   if res = `Ok then (
     dolog t `Info1 (Printf.sprintf "### starting tls to %s\n" t.ip);

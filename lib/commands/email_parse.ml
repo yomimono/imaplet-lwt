@@ -39,8 +39,8 @@ let crlf = "\n"
  * for deduplication
  *)
 
-type data_descr = {offset: int; length: int} with sexp
-type part_descr = {size: int; lines: int} with sexp
+type data_descr = {offset: int; length: int} [@@deriving sexp]
+type part_descr = {size: int; lines: int} [@@deriving sexp]
 type email_map = {part: part_descr; header:data_descr; content: 
   [
     `Data_map of data_descr |
@@ -48,7 +48,7 @@ type email_map = {part: part_descr; header:data_descr; content:
     `Message_map of email_map |
     `Multipart_map of string(*boundary*) * email_map list
   ]
-} with sexp
+} [@@deriving sexp]
 
 let sexp_of t =
   sexp_of_email_map t
@@ -264,7 +264,7 @@ let parse ?(transform=default_transform) pub_key config message ~save_message ~s
   do_encrypt pub_key config 
     (transform (`Postmark (Postmark.to_string (Message.postmark message)))) >>= fun postmark ->
   do_encrypt_content pub_key config (Message.email message) save_attachment hash transform >>= fun (headers,content, attachments) ->
-  save_message hash postmark headers content attachments >>
+  save_message hash postmark headers content attachments >>= fun () ->
   return hash
 
 (* there must be a better way to do it TBD *)
@@ -320,7 +320,7 @@ let reassemble_email priv_key config ~headers ~content ~map ~get_attachment =
       add_boundary buffer ~boundary ~suffix:("--" ^ crlf ^ crlf);
       return ()
   in
-  walk map >>
+  walk map >>= fun () ->
   return (Buffer.contents buffer)
 
 let do_decrypt priv_key config data =

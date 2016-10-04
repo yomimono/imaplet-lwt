@@ -5,7 +5,7 @@ type t = {
   mime_type : string;
   mime_subtype : string;
   params : string Field_name.Assoc.t;
-} with fields, sexp
+} [@@deriving fields, sexp]
 
 val is_multipart : t -> bool
 val is_digest : t -> bool

@@ -226,27 +226,27 @@ space)\n%!";
               (str,MapStr.add k v map)
           ) map (str,MapStr.empty) 
           in
-          Lwt_io.write_line oc str >>
+          Lwt_io.write_line oc str >>= fun () ->
           read map
       in
       read map >>= fun map -> 
       MapStr.fold (fun _ v acc ->
-        acc >>
+        acc >>= fun () ->
         Lwt_io.write_line oc v
       ) map (return())
     )
-  ) >>
+  ) >>= fun () ->
   let echo_on on =
     Lwt_unix.tcgetattr Lwt_unix.stdin >>= fun io ->
     let io = {io with Unix.c_echo = on} in
     Lwt_unix.tcsetattr Lwt_unix.stdin Unix.TCSANOW io
   in
-  system ("mv " ^ Install.config_path ^ " " ^ Install.config_path ^ ".back") >>
+  system ("mv " ^ Install.config_path ^ " " ^ Install.config_path ^ ".back") >>= fun () ->
   system ("mv " ^ config_tmp ^ " " ^ Install.config_path) >>= fun () ->
   Printf.printf "--- Updated imaplet configuration\n%!";
   confirm "\n--- Would you like to add an email user account? Y(yes)|N(no):" yn_exn >>= fun _ ->
   input "\nEnter user name:" "" >>= fun user ->
-  echo_on false >>
+  echo_on false >>= fun () ->
   let rec password () =
     input "\nEnter password:" "" >>= fun p ->
     input "\nRe-enter password:" "" >>= fun p1 ->
@@ -264,7 +264,7 @@ space)\n%!";
   begin
     if exists then (
       confirm "### User account already exists. Overwriting the account will delete all
-emails! Do you want to overwrite it? Y(yes)|N(no):" yn_exn >>
+emails! Do you want to overwrite it? Y(yes)|N(no):" yn_exn >>= fun () ->
       return " -f"
     ) else
       return ""

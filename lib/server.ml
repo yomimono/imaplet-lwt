@@ -47,7 +47,7 @@ let init_unix_socket file =
   let socket = socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   setsockopt socket Unix.SO_REUSEADDR true;
   bind socket sockaddr;
-  chmod file 0o777 >>
+  chmod file 0o777 >>= fun () ->
   return socket
 
 let create_srv_socket addr = 
@@ -113,7 +113,7 @@ let init_connection msgt w =
     | `Smtp -> return ()
     | `Client ->
       let resp = "* OK [CAPABILITY " ^ Configuration.capability ^ "] Imaplet ready.\r\n" in
-      Lwt_io.write w resp >>
+      Lwt_io.write w resp >>= fun () ->
       Lwt_io.flush w
   )
   (fun ex ->

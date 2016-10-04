@@ -23,17 +23,17 @@ module MapStr = Map.Make(String)
 
 type ctype = 
   [`Audio|`Video|`Image|`Application|`Text|`Multipart|`Message|`Other of string]
-  with sexp
+  [@@deriving sexp]
 type stype = 
-  [`Plain|`Rfc822|`Digest|`Alternative|`Parallel|`Mixed|`Other of string] with sexp
-type entity = {offset:int; size:int;lines:int} with sexp
-type boundary = {bopen:string;bclose:string} with sexp
+  [`Plain|`Rfc822|`Digest|`Alternative|`Parallel|`Mixed|`Other of string] [@@deriving sexp]
+type entity = {offset:int; size:int;lines:int} [@@deriving sexp]
+type boundary = {bopen:string;bclose:string} [@@deriving sexp]
 type lightheaders = {position:entity;content_type:ctype; content_subtype:stype; 
-  boundary:boundary option;} with sexp
+  boundary:boundary option;} [@@deriving sexp]
 type lightcontent_ = [`Data|`Message of lightmail |`Multipart of lightmail list]
 and lightcontent = {position:entity;content:lightcontent_}
-and lightmail = {position:entity;headers:lightheaders; body: lightcontent} with sexp
-type lightmessage = {position:entity;postmark:entity;email:lightmail} with sexp
+and lightmail = {position:entity;headers:lightheaders; body: lightcontent} [@@deriving sexp]
+type lightmessage = {position:entity;postmark:entity;email:lightmail} [@@deriving sexp]
 
 let empty_position = {offset=0;size=0;lines=0}
 let empty_headers =
@@ -130,11 +130,11 @@ struct
   let last_crlf_size t =
     let current = position t in
     let size cnt =
-      set_position t current >>
+      set_position t current >>= fun () ->
       return cnt
     in
     let rec rewind prev_cr prev_nl cnt =
-      set_position t (current - cnt) >>
+      set_position t (current - cnt) >>= fun () ->
       read_char t >>= function
       | '\r' -> 
         if prev_cr && prev_nl then
@@ -168,9 +168,9 @@ let mk_position ?(adj=0) reader offset ~lines =
 let adjust_for_boundary reader line_size =
   let current = MemReader.position reader in
   MemReader.last_crlf_size reader >>= fun crlf1 ->
-  MemReader.set_position reader (current - (crlf1 + line_size)) >>
+  MemReader.set_position reader (current - (crlf1 + line_size)) >>= fun () ->
   MemReader.last_crlf_size reader >>= fun crlf2 ->
-  MemReader.set_position reader current >>
+  MemReader.set_position reader current >>= fun () ->
   return (crlf1 + crlf2 + line_size)
 
 (* define operation on Boundary *)
@@ -552,7 +552,7 @@ end = struct
     if Re.execp re_postmark line then
       return {message;postmark_={offset = 0; size = String.length line; lines = 1}}
     else (
-      MemReader.set_position reader 0 >>
+      MemReader.set_position reader 0 >>= fun () ->
       return {message;postmark_={offset = 0; size = 0; lines = 0}}
     )
 

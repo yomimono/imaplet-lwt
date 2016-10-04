@@ -52,7 +52,7 @@ module ImapContents =
      *)
     let merge path ~old x y =
       let open Irmin.Merge.OP in
-      pr path old x y >>
+      pr path old x y >>= fun () ->
       begin
       if x = None then
         ok y
@@ -102,8 +102,8 @@ let sync user mlogout config =
     catch (fun () ->
       (* need to synchronize??? with the client access or the versioning takes
        * care of this? *)
-      pull_exn upstream local >>
-      push_exn upstream local >>
+      pull_exn upstream local >>= fun () ->
+      push_exn upstream local >>= fun () ->
       pick ()
     ) 
     (fun ex -> 

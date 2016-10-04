@@ -368,7 +368,7 @@ let rec _exec_search_all search_one keys =
       Lwt_list.fold_left_s 
       (fun acc k -> 
         if acc then (
-          lwt res = _exec_search_all search_one k in
+          _exec_search_all search_one k >>= fun res ->
           if res = false then
             raise ExecDone
           else
@@ -382,14 +382,13 @@ let rec _exec_search_all search_one keys =
         Log_.log `Error (Printf.sprintf "### search error %s\n" (Printexc.to_string ex)); 
         return false
     )
-  | OrKey (k1,k2) ->
-      lwt res1 = _exec_search_all search_one k1 in
-      if res1 then
-        return true
-      else
-        _exec_search_all search_one k2 
+  | OrKey (k1,k2) -> (
+      _exec_search_all search_one k1 >>= function
+      | true -> return true
+      | false -> _exec_search_all search_one k2 
+  )
   | NotKey k -> 
-    lwt res = _exec_search_all search_one k in
+    _exec_search_all search_one k >>= fun res ->
     return (res = false)
 
 let exec_search_all message keys seq =

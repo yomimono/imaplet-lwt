@@ -34,7 +34,7 @@ module Store = Irmin_git.FS(Irmin.Contents.String)(Irmin.Ref.String)(Irmin.Hash.
 module View = Irmin.View(Store)
 module MapStr = Map.Make(String)
 
-type hashes = {attachments:int} with sexp
+type hashes = {attachments:int} [@@deriving sexp]
 
 type irmin_accessors =
   (unit -> string Lwt.t) * (* postmark *)
@@ -145,7 +145,7 @@ module LazyIrminEmail : LazyEmail_intf with type c = email_irmin_accessors =
           add_string last_crlf;
           return ()
       in
-      _raw_content t false "" >>
+      _raw_content t false "" >>= fun () ->
       return (Buffer.contents buffer)
 
     let to_string ?(incl=`Map MapStr.empty) ?(excl=MapStr.empty) t =
@@ -393,7 +393,7 @@ module GitWorkdirIntf : GitIntf with type store = string
       ) else (
         return ()
       )
-      end >>
+      end >>= fun () ->
       with_file ~lock:true path ~flags:[Unix.O_CREAT;Unix.O_TRUNC;Unix.O_WRONLY] ~perms:0o664
       ~mode:Lwt_io.Output ~f:(fun ch ->
         Lwt_io.write ch data
@@ -721,7 +721,7 @@ module GitMailboxMake
     (* how to make this the transaction? TBD *)
     let move_mailbox mbox path =
       let (_,key2) = Key_.mailbox_of_path path in
-      GI_tr.move_view mbox.trans key2 >>
+      GI_tr.move_view mbox.trans key2 >>= fun () ->
       GI_tr.remove_view mbox.trans
 
     let read_mailbox_metadata mbox =
@@ -798,13 +798,13 @@ module GitMailboxMake
         attachments;
       } in
       GI_tr.update mbox.trans (get_key mbox.mbox_key (`Hashes msg_hash)) 
-        (Sexp.to_string (sexp_of_hashes h)) >>
+        (Sexp.to_string (sexp_of_hashes h)) >>= fun () ->
       return h
 
     let workdir_update mbox key data =
       GitWorkdirIntf_tr.begin_transaction ~user:mbox.user mbox.config
         (Key_.create_account mbox.user) >>= fun trans ->
-      GitWorkdirIntf_tr.update trans key data >>
+      GitWorkdirIntf_tr.update trans key data >>= fun () ->
       GitWorkdirIntf_tr.end_transaction trans
       
     let workdir_read mbox key =
@@ -850,8 +850,8 @@ module GitMailboxMake
         let (pub,_) = mbox.pubpriv in
         Email_parse.parse pub mbox.config message ~save_message:(fun msg_hash postmark headers content attachments ->
           update_hashes mbox msg_hash attachments >>= fun h ->
-          update msg_hash "0" postmark >>
-          update msg_hash "1" headers >>
+          update msg_hash "0" postmark >>= fun () ->
+          update msg_hash "1" headers >>= fun () ->
           update msg_hash "2" content
         ) 
         ~save_attachment:(fun msg_hash contid attachment ->
@@ -864,7 +864,7 @@ module GitMailboxMake
       ) else if mbox.config.maildir_parse then (
         Email_parse.message_to_blob mbox.config mbox.pubpriv message >>= fun (msg_hash,message) ->
         let key = get_key mbox.mbox_key (`Blob msg_hash) in
-        _update mbox key message >>
+        _update mbox key message >>= fun () ->
         return msg_hash
       (* this is basically a maildir file stored in irmin
        * the only difference is the separate metadata file
@@ -872,12 +872,12 @@ module GitMailboxMake
       ) else (
         Email_parse.message_unparsed_to_blob mbox.config mbox.pubpriv message >>= fun (msg_hash,message) ->
         let key = get_key mbox.mbox_key (`Blob msg_hash) in
-        _update mbox key message >>
+        _update mbox key message >>= fun () ->
         return msg_hash
       )
       end >>= fun msg_hash ->
       GI_tr.update mbox.trans (get_key mbox.mbox_key (`Metamessage msg_hash)) 
-          (Sexp.to_string (sexp_of_mailbox_message_metadata message_metadata)) >>
+          (Sexp.to_string (sexp_of_mailbox_message_metadata message_metadata)) >>= fun () ->
       update_index_uid mbox (msg_hash,message_metadata.uid)
 
     let get_uid mbox position = 
@@ -1013,7 +1013,7 @@ module GitMailboxMake
       | `NotFound -> return ()
       | `Ok (seq,hash,uid) ->
         GI_tr.update mbox2.trans (get_key mbox2.mbox_key (`Metamessage hash)) 
-          (Sexp.to_string (sexp_of_mailbox_message_metadata message_metadata)) >>
+          (Sexp.to_string (sexp_of_mailbox_message_metadata message_metadata)) >>= fun () ->
         update_index_uid mbox2 (hash,message_metadata.uid)
 
     let remove_storage mbox msg_hash contid =
@@ -1026,13 +1026,13 @@ module GitMailboxMake
         begin
         if mbox.config.single_store then (
           get_hashes mbox hash >>= fun h ->
-          GI_tr.remove mbox.trans (get_key mbox.mbox_key (`Hashes hash)) >>
-          remove_storage mbox hash "0" >>
-          remove_storage mbox hash "1" >>
-          remove_storage mbox hash "2" >>
+          GI_tr.remove mbox.trans (get_key mbox.mbox_key (`Hashes hash)) >>= fun () ->
+          remove_storage mbox hash "0" >>= fun () ->
+          remove_storage mbox hash "1" >>= fun () ->
+          remove_storage mbox hash "2" >>= fun () ->
           let rec delattach i =
             if i < h.attachments then
-              remove_storage mbox hash (string_of_int (3 + i)) >>
+              remove_storage mbox hash (string_of_int (3 + i)) >>= fun () ->
               delattach (i + 1)
             else
               return ()
@@ -1041,9 +1041,9 @@ module GitMailboxMake
         ) else (
           _remove mbox (get_key mbox.mbox_key (`Blob hash))
         )
-        end >>
-        GI_tr.remove mbox.trans (get_key mbox.mbox_key (`Metamessage hash)) >>
-        GI_tr.remove mbox.trans (get_key mbox.mbox_key (`MetamsgRoot hash)) >>
+        end >>= fun () ->
+        GI_tr.remove mbox.trans (get_key mbox.mbox_key (`Metamessage hash)) >>= fun () ->
+        GI_tr.remove mbox.trans (get_key mbox.mbox_key (`MetamsgRoot hash)) >>= fun () ->
         read_index_uid mbox >>= fun uids ->
         let uids = List.fold_right (fun (hash,u) uids ->
           if u = uid then
@@ -1161,8 +1161,8 @@ module GitMailboxMake
       if res then
         return `Exists
       else (
-        GI_tr.update view (Key_.t_of_path "subscriptions") (str_sexp_of_list []) >>
-        GI_tr.end_transaction view >>
+        GI_tr.update view (Key_.t_of_path "subscriptions") (str_sexp_of_list []) >>= fun () ->
+        GI_tr.end_transaction view >>= fun () ->
         return `Ok
       )
 

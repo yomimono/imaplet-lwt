@@ -212,13 +212,13 @@ let reqcert priv pem =
   Utils.exists (Filename.dirname pem) Unix.S_DIR >>= fun res ->
   let (r,w) = Lwt_unix.pipe () in
   Lwt_process.pwrite ~stderr:`Dev_null ~stdout:(`FD_move (Lwt_unix.unix_file_descr w)) ("", 
-  [|"openssl"; "req"; "-x509"; "-batch"; "-new"; "-key"; "/dev/stdin"|]) priv >>
+  [|"openssl"; "req"; "-x509"; "-batch"; "-new"; "-key"; "/dev/stdin"|]) priv >>= fun () ->
   (* the pem file doesn't appear to be flushed/closed on return, so doing it
    * this way instead of -out option to req *)
   Lwt_io.flush_all () >>= fun () ->
   let ic = Lwt_io.of_fd ~mode:Lwt_io.Input r in
   Lwt_io.read ic >>= fun str ->
-  Lwt_io.close ic >>
+  Lwt_io.close ic >>= fun () ->
   Lwt_io.with_file pem ~mode:Lwt_io.Output (fun oc -> 
     Lwt_io.write oc str
   )
@@ -284,16 +284,16 @@ let () =
         created := Some user_path;
         catch (fun () ->
           Lwt_unix.mkdir (Filename.dirname user_path) 0o775
-        ) (fun _ -> return ()) >>
-        Lwt_unix.mkdir user_path 0o775 >>
-        Lwt_unix.mkdir repo_root 0o775 >>
-        Lwt_unix.mkdir user_cert_path 0o775 >>
+        ) (fun _ -> return ()) >>= fun () ->
+        Lwt_unix.mkdir user_path 0o775 >>= fun () ->
+        Lwt_unix.mkdir repo_root 0o775 >>= fun () ->
+        Lwt_unix.mkdir user_cert_path 0o775 >>= fun () ->
         file_cmd priv_path (fun () -> 
           genrsa user pswd priv_path >>= fun key ->
 	  reqcert key pem_path
-        ) >>
+        ) >>= fun () ->
         dir_cmd repo (fun () -> 
-          repo_init () >>
+          repo_init () >>= fun () ->
           if ignore then
             return ()
           else (
@@ -304,13 +304,13 @@ let () =
             | `Ok ->
             let create_mailbox mailbox =
               factory mailbox keys >>= fun (module Mailbox) ->
-              Mailbox.MailboxStorage.create_mailbox Mailbox.this >>
-              Mailbox.MailboxStorage.subscribe Mailbox.this >>
+              Mailbox.MailboxStorage.create_mailbox Mailbox.this >>= fun () ->
+              Mailbox.MailboxStorage.subscribe Mailbox.this >>= fun () ->
               Mailbox.MailboxStorage.commit Mailbox.this
             in
-            create_mailbox "INBOX" >>
-            create_mailbox "Drafts" >>
-            create_mailbox "Deleted Messages" >>
+            create_mailbox "INBOX" >>= fun () ->
+            create_mailbox "Drafts" >>= fun () ->
+            create_mailbox "Deleted Messages" >>= fun () ->
             create_mailbox "Sent Messages"
           )
         ) >>= fun () ->

@@ -755,7 +755,7 @@ module GitMailboxMake
       list_find l (fun f -> f = fl)
 
     let read_index_uid mbox =
-      match mbox.!index with
+      match !(mbox.index) with
       | None ->
         GI_tr.read_exn mbox.trans (get_key mbox.mbox_key `Index) >>= fun index_sexp_str ->
         let uids = list_of_sexp 

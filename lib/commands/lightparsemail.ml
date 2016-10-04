@@ -58,7 +58,7 @@ struct
 
   let read_line_opt t = 
     try
-      let subs = Re.exec ~pos:t.!offset re_line t.text in
+      let subs = Re.exec ~pos:!(t.offset) re_line t.text in
       let line = Re.get subs 1 in
       let (ofs,len) = 
         try
@@ -115,14 +115,14 @@ struct
     Lwt_io.set_position t.ic (Int64.of_int p)
 
   let read_line t = 
-    t.lines := t.!lines + 1;
+    t.lines := !(t.lines) + 1;
     Lwt_io.read_line t.ic
 
   let read_line_opt t = 
     Lwt_io.read_line_opt t.ic >>= function
     | None -> return None
     | Some line ->
-      t.lines := t.!lines + 1;
+      t.lines := !(t.lines) + 1;
       return (Some line)
 
   let read_char t = Lwt_io.read_char t.ic
@@ -152,7 +152,7 @@ struct
 
   let to_string t = t.message
 
-  let lines t = t.!lines
+  let lines t = !(t.lines)
 end
 
 (* get the size for the given position to the current position *)
